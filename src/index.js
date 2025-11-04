@@ -8,7 +8,6 @@ export class CryptedWallet {
     this.wallets = [];
   }
 
-  // Placeholder methods for future implementation
   createWallet() {
     console.log('Creating wallet...');
   }

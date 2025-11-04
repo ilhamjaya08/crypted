@@ -1,8 +1,14 @@
 # Crypted
 
-A simple CLI-based cryptocurrency wallet built with Node.js.
+A beautiful TUI (Text User Interface) cryptocurrency wallet built with Node.js.
 
-## Features (Planned)
+## Features
+
+- 🎨 Interactive TUI with elegant rounded borders
+- ⌨️  Keyboard-driven navigation (like Neovim)
+- 🔐 Secure wallet management (coming soon)
+
+## Planned Features
 
 - Create and manage crypto wallets
 - Support for multiple cryptocurrencies
@@ -18,19 +24,34 @@ pnpm install
 
 ## Usage
 
-```bash
-# Run directly
-pnpm start
+### Interactive Mode (TUI)
 
-# Or after installation
-crypted help
+Simply run without arguments to launch the interactive interface:
+
+```bash
+# Launch interactive TUI
+pnpm start
+# or
+crypted
 ```
 
-## Commands
+**Keyboard Shortcuts:**
+- `q` or `Ctrl+C` - Quit
+- `c` - Create wallet
+- `l` - List wallets
+- `i` - Import wallet
+- `s` - Settings
+- `h` - Help
 
-- `crypted create` - Create a new wallet
-- `crypted list` - List all wallets
-- `crypted help` - Show help message
+### Direct Commands
+
+For quick operations without TUI:
+
+```bash
+crypted create    # Create a new wallet
+crypted list      # List all wallets
+crypted help      # Show help message
+```
 
 ## Development
 
