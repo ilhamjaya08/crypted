@@ -45,3 +45,7 @@ tmp/
 temp/
 
 .claude
+.crypted
+
+FINAL_SUMMARY.md
+IMPLEMENTATION_STATUS.md
