@@ -170,7 +170,7 @@ export class CryptedUI {
       left: 'center',
       width: 'shrink',
       height: 1,
-      content: '{dim}Tab: Next | Enter: Submit | Ctrl+C: Exit{/dim}',
+      content: '{black-fg}Tab: Next | Enter: Submit | Ctrl+C: Exit{/black-fg}',
       tags: true
     });
 
@@ -248,7 +248,7 @@ export class CryptedUI {
       left: 'center',
       width: 'shrink',
       height: 5,
-      content: '{center}{bold}{cyan-fg}CRYPTED WALLET{/cyan-fg}{/bold}\n{dim}Secure CLI Crypto Wallet{/dim}{/center}',
+      content: '{center}{bold}{cyan-fg}CRYPTED WALLET{/cyan-fg}{/bold}\n{black-fg}Secure CLI Crypto Wallet{/black-fg}{/center}',
       tags: true
     });
 
@@ -274,7 +274,7 @@ export class CryptedUI {
       left: 'center',
       width: 50,
       height: 2,
-      content: '{center}{dim}Press Enter to unlock{/dim}{/center}',
+      content: '{center}{black-fg}Press Enter to unlock{/black-fg}{/center}',
       tags: true
     });
 
@@ -284,7 +284,7 @@ export class CryptedUI {
       left: 'center',
       width: 'shrink',
       height: 1,
-      content: '{dim}Ctrl+C: Exit{/dim}',
+      content: '{black-fg}Ctrl+C: Exit{/black-fg}',
       tags: true
     });
 
@@ -351,7 +351,7 @@ export class CryptedUI {
   createDashboard() {
     // Header
     this.widgets.header = this.grid.set(0, 0, 2, 12, blessed.box, {
-      content: '{center}{bold}{cyan-fg}CRYPTED{/cyan-fg}{/bold} {dim}v0.1.0{/dim}{/center}',
+      content: '{center}{bold}{cyan-fg}CRYPTED{/cyan-fg}{/bold} {black-fg}v0.1.0{/black-fg}{/center}',
       tags: true,
       style: { border: { fg: 'cyan' } },
       border: { type: 'line' }
@@ -406,7 +406,7 @@ export class CryptedUI {
     // Status Bar
     this.widgets.statusBar = this.grid.set(10, 0, 2, 12, blessed.box, {
       tags: true,
-      content: ' {bold}Keys:{/bold} [c]reate [i]mport [l]ock [r]efresh [q]uit',
+      content: ' {bold}Keys:{/bold} [c]reate [i]mport [d]elete [l]ock [r]efresh [q]uit',
       style: { fg: 'black', bg: 'cyan' }
     });
   }
@@ -445,11 +445,11 @@ export class CryptedUI {
         for (const w of hd.wallets) {
           const star = w.isActive ? '{yellow-fg}★{/yellow-fg} ' : '  ';
           const addr = w.address.slice(0, 6) + '...' + w.address.slice(-4);
-          items.push(`    ${star}{blue-fg}💼{/blue-fg} #${w.index} {dim}${addr}{/dim}`);
+          items.push(`    ${star}{blue-fg}💼{/blue-fg} #${w.index} {black-fg}${addr}{/black-fg}`);
           this.walletTree.push({ type: 'derived', id: w.id, seedId: hd.seedId, ...w });
         }
 
-        items.push(`    {dim}➕ Derive New{/dim}`);
+        items.push(`    {black-fg}➕ Derive New{/black-fg}`);
         this.walletTree.push({ type: 'derive-action', seedId: hd.seedId, nextIndex: hd.wallets.length });
       }
     }
@@ -463,7 +463,7 @@ export class CryptedUI {
       for (const w of wallets.privateKeyWallets) {
         const star = w.isActive ? '{yellow-fg}★{/yellow-fg} ' : '  ';
         const addr = w.address.slice(0, 6) + '...' + w.address.slice(-4);
-        items.push(`${star}{red-fg}🔑{/red-fg} ${w.name} {dim}${addr}{/dim}`);
+        items.push(`${star}{red-fg}🔑{/red-fg} ${w.name} {black-fg}${addr}{/black-fg}`);
         this.walletTree.push({ type: 'privatekey', id: w.id, ...w });
       }
     }
@@ -476,32 +476,159 @@ export class CryptedUI {
 
     try {
       this.selectedWalletId = walletId;
-      this.widgets.details.setContent('{center}{cyan-fg}Loading...{/cyan-fg}{/center}');
+      this.widgets.details.setContent('{center}{cyan-fg}Loading balances...{/cyan-fg}{/center}');
       this.screen.render();
 
       const wallet = this.wallet.walletManager.getWallet(walletId);
-      const balanceInfo = await this.wallet.getBalanceWithUSD(walletId);
 
-      const content = `
+      // Fetch balances from multiple networks in parallel
+      const networks = [
+        { key: 'eth-mainnet', name: 'ETH Mainnet', symbol: 'ETH' },
+        { key: 'base-mainnet', name: 'Base Mainnet', symbol: 'ETH' },
+        { key: 'optimism-mainnet', name: 'OP Mainnet', symbol: 'ETH' }
+      ];
+
+      const balancePromises = networks.map(async (network) => {
+        try {
+          // Create temporary wallet instance for this network
+          const tempWallet = await this.getBalanceForNetwork(wallet.address, network.key, network.symbol);
+          return {
+            network: network.name,
+            ...tempWallet,
+            error: null
+          };
+        } catch (error) {
+          return {
+            network: network.name,
+            balance: '0',
+            usd: 0,
+            formatted: { balance: '0 ' + network.symbol, usd: '$0.00' },
+            error: error.message
+          };
+        }
+      });
+
+      const balances = await Promise.all(balancePromises);
+
+      // Build content with all network balances
+      let content = `
 {bold}Name:{/bold} ${wallet.name}
 
 {bold}Address:{/bold}
 {cyan-fg}${wallet.address}{/cyan-fg}
 
-{bold}Network:{/bold} ${wallet.network}
-
-{bold}Balance:{/bold}
-{green-fg}${balanceInfo.formatted.balance}{/green-fg}
-{yellow-fg}${balanceInfo.formatted.usd}{/yellow-fg}
-
 {bold}Type:{/bold} ${wallet.type === 'privatekey' ? 'Private Key' : `HD Path #${wallet.index}`}
+
+{bold}Network Balances:{/bold}
 `;
+
+      for (const bal of balances) {
+        if (bal.error) {
+          content += `\n{yellow-fg}${bal.network}:{/yellow-fg} {red-fg}Error{/red-fg}`;
+        } else {
+          content += `\n{yellow-fg}━ ${bal.network}{/yellow-fg}`;
+          content += `\n  {green-fg}${bal.formatted.balance}{/green-fg} {gray-fg}(${bal.formatted.usd}){/gray-fg}`;
+
+          // Add ERC20 tokens if any
+          if (bal.tokens && bal.tokens.length > 0) {
+            for (const token of bal.tokens) {
+              content += `\n  {cyan-fg}${token.formatted.balance}{/cyan-fg} {gray-fg}(${token.formatted.usd}){/gray-fg}`;
+            }
+            content += `\n  {bold}Total: ${bal.totalFormatted}{/bold}`;
+          }
+        }
+      }
 
       this.widgets.details.setContent(content);
       this.screen.render();
     } catch (error) {
       this.widgets.details.setContent(`\n{center}{red-fg}Error\n${error.message}{/red-fg}{/center}`);
       this.screen.render();
+    }
+  }
+
+  /**
+   * Get balance for specific network (native + ERC20 tokens)
+   * @param {string} address - Wallet address
+   * @param {string} network - Network key
+   * @param {string} symbol - Token symbol
+   * @returns {Promise<Object>} Balance info including tokens
+   */
+  async getBalanceForNetwork(address, network, symbol) {
+    try {
+      const { EVMWallet } = await import('./wallet/chains/EVMWallet.js');
+      const { COMMON_TOKENS } = await import('./wallet/config/tokens.js');
+      const { ethers } = await import('ethers');
+
+      const tempWallet = new EVMWallet({ network });
+
+      // Get provider
+      const provider = new ethers.JsonRpcProvider(tempWallet.defaultRPCs[network]);
+
+      // Fetch native token balance
+      const nativeBalance = await provider.getBalance(address);
+      const nativeBalanceInEth = ethers.formatEther(nativeBalance);
+
+      // Get USD value for native token
+      const nativePriceData = await this.wallet.priceOracle.formatBalanceWithUSD(symbol, nativeBalanceInEth);
+
+      // Fetch ERC20 token balances
+      const tokens = COMMON_TOKENS[network] || [];
+      const tokenBalances = [];
+
+      // Get all token balances in parallel
+      const tokenPromises = tokens.map(async (token) => {
+        try {
+          // ERC-20 ABI for balanceOf
+          const erc20Abi = ['function balanceOf(address owner) view returns (uint256)'];
+          const contract = new ethers.Contract(token.address, erc20Abi, provider);
+
+          const balance = await contract.balanceOf(address);
+          const balanceFormatted = ethers.formatUnits(balance, token.decimals);
+          const balanceNum = parseFloat(balanceFormatted);
+
+          // Only include if balance > 0
+          if (balanceNum > 0.000001) {
+            // Get price from oracle
+            const price = await this.wallet.priceOracle.getPriceByCoingeckoId(token.coingeckoId);
+            const usdValue = price * balanceNum;
+
+            return {
+              symbol: token.symbol,
+              name: token.name,
+              balance: balanceFormatted,
+              balanceNum,
+              usd: usdValue,
+              formatted: {
+                balance: `${balanceNum.toFixed(4)} ${token.symbol}`,
+                usd: this.wallet.priceOracle.formatPrice(usdValue)
+              }
+            };
+          }
+          return null;
+        } catch (error) {
+          console.error(`Error fetching ${token.symbol} balance:`, error.message);
+          return null;
+        }
+      });
+
+      const tokenResults = await Promise.all(tokenPromises);
+      const validTokens = tokenResults.filter(t => t !== null);
+
+      // Calculate total USD value
+      const totalUSD = nativePriceData.usd + validTokens.reduce((sum, t) => sum + t.usd, 0);
+
+      return {
+        balance: nativeBalanceInEth,
+        symbol,
+        usd: nativePriceData.usd,
+        formatted: nativePriceData.formatted,
+        tokens: validTokens,
+        totalUSD,
+        totalFormatted: this.wallet.priceOracle.formatPrice(totalUSD)
+      };
+    } catch (error) {
+      throw new Error(`Failed to get balance for ${network}: ${error.message}`);
     }
   }
 
@@ -540,6 +667,7 @@ export class CryptedUI {
 
     this.screen.key(['c'], () => this.showCreateChoice());
     this.screen.key(['i'], () => this.showImportChoice());
+    this.screen.key(['d'], () => this.showDeleteDialog());
     this.screen.key(['l'], async () => {
       await this.wallet.lock();
       this.showUnlockScreen();
@@ -628,7 +756,7 @@ export class CryptedUI {
       left: 2,
       width: '90%',
       height: 1,
-      content: '{center}{dim}Enter: Create | Esc: Cancel{/dim}{/center}',
+      content: '{center}{black-fg}Enter: Create | Esc: Cancel{/black-fg}{/center}',
       tags: true
     });
 
@@ -703,7 +831,7 @@ export class CryptedUI {
       left: 'center',
       width: 'shrink',
       height: 1,
-      content: '{center}{dim}Press Enter to continue{/dim}{/center}',
+      content: '{center}{black-fg}Press Enter to continue{/black-fg}{/center}',
       tags: true
     });
 
@@ -754,7 +882,7 @@ export class CryptedUI {
       left: 2,
       width: '90%',
       height: 1,
-      content: '{center}{dim}Enter: Create | Esc: Cancel{/dim}{/center}',
+      content: '{center}{black-fg}Enter: Create | Esc: Cancel{/black-fg}{/center}',
       tags: true
     });
 
@@ -839,14 +967,14 @@ export class CryptedUI {
   showImportSeed() {
     const modal = this.createModal(' Import Seed Phrase ', 70, 20);
 
-    const mnemonicInput = blessed.textarea({
+    const mnemonicInput = blessed.textbox({
       parent: modal,
       top: 2,
       left: 2,
       width: '90%',
       height: 5,
       border: { type: 'line' },
-      label: ' 12-Word Seed Phrase ',
+      label: ' 12-Word Seed Phrase (space-separated) ',
       inputOnFocus: true,
       style: { focus: { border: { fg: 'green' } } }
     });
@@ -880,7 +1008,7 @@ export class CryptedUI {
       left: 2,
       width: '90%',
       height: 1,
-      content: '{center}{dim}Tab: Next | Enter: Import | Esc: Cancel{/dim}{/center}',
+      content: '{center}{black-fg}Tab: Next | Enter: Import | Esc: Cancel{/black-fg}{/center}',
       tags: true
     });
 
@@ -912,6 +1040,11 @@ export class CryptedUI {
     };
 
     mnemonicInput.key(['tab'], () => nameInput.focus());
+    mnemonicInput.key(['enter'], () => {
+      if (mnemonicInput.getValue().trim()) {
+        nameInput.focus();
+      }
+    });
     nameInput.key(['tab'], () => mnemonicInput.focus());
     nameInput.key(['enter'], doImport);
 
@@ -1030,7 +1163,7 @@ export class CryptedUI {
       left: 'center',
       width: 'shrink',
       height: 1,
-      content: '{dim}[Y]es | [N]o{/dim}',
+      content: '{black-fg}[Y]es | [N]o{/black-fg}',
       tags: true
     });
 
@@ -1173,11 +1306,84 @@ export class CryptedUI {
       left: 'center',
       width: 'shrink',
       height: 1,
-      content: '{dim}[Y]es | [N]o{/dim}',
+      content: '{black-fg}[Y]es | [N]o{/black-fg}',
       tags: true
     });
 
     modal.key(['y', 'Y', 'enter'], () => process.exit(0));
+    modal.key(['n', 'N', 'escape'], () => {
+      modal.detach();
+      this.screen.render();
+      this.widgets.walletList.focus();
+    });
+
+    modal.focus();
+    this.screen.render();
+  }
+
+  showDeleteDialog() {
+    const selectedIndex = this.widgets.walletList.selected;
+    const selected = this.walletTree[selectedIndex];
+
+    if (!selected || selected.type === 'header' || selected.type === 'separator') {
+      this.showErrorBox('Error', 'Please select a wallet to delete');
+      return;
+    }
+
+    const modal = this.createModal(' Delete Wallet ', 60, 12);
+
+    let walletInfo = '';
+    let deleteId = null;
+
+    if (selected.type === 'hd-parent') {
+      walletInfo = 'Delete entire HD wallet and all derived wallets?';
+      deleteId = selected.seedId;
+    } else if (selected.type === 'derived') {
+      const wallet = this.wallet.walletManager.getWallet(selected.id);
+      walletInfo = `Delete wallet:\n${wallet.name}\n${wallet.address.slice(0, 10)}...${wallet.address.slice(-8)}`;
+      deleteId = selected.id;
+    } else if (selected.type === 'privatekey') {
+      const wallet = this.wallet.walletManager.getWallet(selected.id);
+      walletInfo = `Delete wallet:\n${wallet.name}\n${wallet.address.slice(0, 10)}...${wallet.address.slice(-8)}`;
+      deleteId = selected.id;
+    }
+
+    blessed.box({
+      parent: modal,
+      top: 2,
+      left: 2,
+      width: '90%',
+      height: 5,
+      content: `{center}{red-fg}{bold}WARNING!{/bold}{/red-fg}\n${walletInfo}\n\nThis action cannot be undone!{/center}`,
+      tags: true
+    });
+
+    blessed.box({
+      parent: modal,
+      bottom: 1,
+      left: 'center',
+      width: 'shrink',
+      height: 1,
+      content: '{black-fg}[Y]es | [N]o{/black-fg}',
+      tags: true
+    });
+
+    modal.key(['y', 'Y', 'enter'], async () => {
+      modal.detach();
+      this.screen.render();
+
+      const loading = this.showLoading('Deleting wallet...');
+
+      try {
+        await this.wallet.deleteWallet(deleteId);
+        loading.detach();
+        this.showSuccessBox('Success', 'Wallet deleted!');
+      } catch (error) {
+        loading.detach();
+        this.showErrorBox('Error', error.message);
+      }
+    });
+
     modal.key(['n', 'N', 'escape'], () => {
       modal.detach();
       this.screen.render();

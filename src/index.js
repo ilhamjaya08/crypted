@@ -466,6 +466,47 @@ export class CryptedWallet {
   }
 
   /**
+   * Delete wallet
+   * @param {string} walletId - Wallet ID or seedId
+   * @returns {Promise<boolean>} Success
+   */
+  async deleteWallet(walletId) {
+    try {
+      if (this.isLocked()) throw new Error('Wallet is locked');
+
+      // Check if it's a seed ID (HD wallet)
+      if (walletId.startsWith('seed_')) {
+        const hdWallet = this.walletManager.hdWallets.get(walletId);
+        if (hdWallet) {
+          // Remove all derived wallets
+          for (const [index, wallet] of hdWallet.derivedWallets.entries()) {
+            this.walletManager.removeWallet(wallet.id);
+          }
+          // Remove HD wallet
+          this.walletManager.hdWallets.delete(walletId);
+          // Remove from storage
+          if (this.masterPassword) {
+            await this.storageManager.deleteWallet(walletId);
+          }
+          return true;
+        }
+      }
+
+      // Regular wallet removal
+      this.walletManager.removeWallet(walletId);
+
+      // Remove from storage
+      if (this.masterPassword) {
+        await this.storageManager.deleteWallet(walletId);
+      }
+
+      return true;
+    } catch (error) {
+      throw new Error(`Failed to delete wallet: ${error.message}`);
+    }
+  }
+
+  /**
    * Get supported networks
    * @returns {Array} Supported networks
    */

@@ -3,6 +3,7 @@
  * Manages multiple wallets and provides unified interface
  */
 
+import crypto from 'crypto';
 import { EVMWallet } from './chains/EVMWallet.js';
 
 export class WalletManager {
@@ -503,9 +504,11 @@ export class WalletManager {
    * @returns {string} Seed ID
    */
   generateSeedId(mnemonic) {
-    // Simple hash of mnemonic for seed ID
+    // Hash phrase1+phrase12 for seed ID
     const words = mnemonic.split(' ');
-    return `seed_${words[0]}_${words[words.length - 1]}`;
+    const combined = words[0] + words[words.length - 1];
+    const hash = crypto.createHash('sha256').update(combined).digest('hex');
+    return `seed_${hash.slice(0, 16)}`;
   }
 
   /**

@@ -204,6 +204,81 @@ export class PriceOracle {
   addTokenId(symbol, coingeckoId) {
     this.tokenIds[symbol.toUpperCase()] = coingeckoId;
   }
+
+  /**
+   * Get price by CoinGecko ID
+   * @param {string} coingeckoId - CoinGecko token ID
+   * @returns {Promise<number>} Price in USD
+   */
+  async getPriceByCoingeckoId(coingeckoId) {
+    try {
+      // Check cache using coingeckoId as key
+      const cached = this.getCachedPrice(coingeckoId);
+      if (cached !== null) {
+        return cached;
+      }
+
+      // Fetch from coingecko
+      const url = `https://api.coingecko.com/api/v3/simple/price?ids=${coingeckoId}&vs_currencies=usd`;
+      const response = await fetch(url);
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const price = data[coingeckoId]?.usd || 0;
+
+      // Cache the price
+      this.priceCache.set(coingeckoId, price);
+      this.lastFetch.set(coingeckoId, Date.now());
+
+      return price;
+    } catch (error) {
+      console.error(`Failed to fetch price for ${coingeckoId}:`, error.message);
+      return this.priceCache.get(coingeckoId) || 0;
+    }
+  }
+
+  /**
+   * Get prices for multiple tokens by CoinGecko IDs
+   * @param {Array<string>} coingeckoIds - Array of CoinGecko IDs
+   * @returns {Promise<Object>} Map of coingeckoId => price
+   */
+  async getPricesByCoingeckoIds(coingeckoIds) {
+    try {
+      // Build comma-separated list
+      const ids = coingeckoIds.join(',');
+      const url = `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd`;
+
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const prices = {};
+
+      for (const id of coingeckoIds) {
+        const price = data[id]?.usd || 0;
+        prices[id] = price;
+
+        // Cache the price
+        this.priceCache.set(id, price);
+        this.lastFetch.set(id, Date.now());
+      }
+
+      return prices;
+    } catch (error) {
+      console.error('Failed to fetch prices:', error.message);
+      // Return cached prices
+      const prices = {};
+      for (const id of coingeckoIds) {
+        prices[id] = this.priceCache.get(id) || 0;
+      }
+      return prices;
+    }
+  }
 }
 
 export default PriceOracle;
